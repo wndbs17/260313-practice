@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: #172b4d;
+        font-family: "Noto Sans KR", sans-serif;
+        background: transparent;
+      }
+      .board {
+        overflow: hidden;
+        padding: 12px;
+        border: 1px solid #e6edf4;
+        border-radius: 18px;
+        background: #fff;
+        box-shadow: 0 5px 18px #152b4510;
+      }
+      .title {
+        margin: 0 0 8px;
+        font-size: 15px;
+        font-weight: 700;
+      }
+      svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        touch-action: none;
+        user-select: none;
+      }
+      .grid { stroke: #e7edf3; stroke-width: 1; }
+      .axis { stroke: #bdcbd8; stroke-width: 1.5; }
+      .shape {
+        fill: #bfece5;
+        fill-opacity: .78;
+        stroke: #087f8c;
+        stroke-width: 3;
+        stroke-linejoin: round;
+      }
+      .vertex {
+        fill: #087f8c;
+        stroke: #fff;
+        stroke-width: 3;
+        cursor: grab;
+        touch-action: none;
+      }
+      .vertex:hover, .vertex.dragging {
+        fill: #f0785d;
+        cursor: grabbing;
+        r: 12px;
+      }
+      .label {
+        fill: #172b4d;
+        font-size: 13px;
+        font-weight: 700;
+        pointer-events: none;
+      }
+      .help {
+        margin: 7px 2px 0;
+        color: #718096;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="board">
+      <p class="title" id="title">도형 꼭짓점을 끌어 보세요</p>
+      <svg id="grid" viewBox="0 0 560 560" aria-label="꼭짓점을 드래그하는 격자">
+        <g id="grid-lines"></g>
+        <polygon id="polygon" class="shape"></polygon>
+        <g id="vertices"></g>
+      </svg>
+      <p class="help">꼭짓점은 격자 칸에 맞춰 움직여요. 점을 잡아 끌어 보세요.</p>
+    </div>
+    <script>
+      const svg = document.getElementById("grid");
+      const polygon = document.getElementById("polygon");
+      const verticesGroup = document.getElementById("vertices");
+      const gridGroup = document.getElementById("grid-lines");
+      const title = document.getElementById("title");
+      const minPixel = 38;
+      const maxPixel = 522;
+      const minCoord = -6;
+      const maxCoord = 6;
+      const spacing = (maxPixel - minPixel) / (maxCoord - minCoord);
+      let points = [];
+      let activeIndex = null;
+      let componentArgs = {};
+
+      function toPixel(point) {
+        return [
+          minPixel + (point[0] - minCoord) * spacing,
+          minPixel + (maxCoord - point[1]) * spacing,
+        ];
+      }
+
+      function drawGrid() {
+        const lines = [];
+        for (let value = minCoord; value <= maxCoord; value += 1) {
+          const x = minPixel + (value - minCoord) * spacing;
+          const y = minPixel + (maxCoord - value) * spacing;
+          const klass = value === 0 ? "axis" : "grid";
+          lines.push(`<line x1="${x}" y1="${minPixel}" x2="${x}" y2="${maxPixel}" class="${klass}"/>`);
+          lines.push(`<line x1="${minPixel}" y1="${y}" x2="${maxPixel}" y2="${y}" class="${klass}"/>`);
+        }
+        gridGroup.innerHTML = lines.join("");
+      }
+
+      function render() {
+        polygon.setAttribute("points", points.map((point) => toPixel(point).join(",")).join(" "));
+        verticesGroup.replaceChildren();
+        points.forEach((point, index) => {
+          const [x, y] = toPixel(point);
+          const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          circle.setAttribute("cx", x);
+          circle.setAttribute("cy", y);
+          circle.setAttribute("r", "9");
+          circle.setAttribute("class", `vertex${activeIndex === index ? " dragging" : ""}`);
+          circle.dataset.index = index;
+          circle.setAttribute("aria-label", `꼭짓점 ${String.fromCharCode(65 + index)}`);
+          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          label.setAttribute("x", x + 12);
+          label.setAttribute("y", y - 10);
+          label.setAttribute("class", "label");
+          label.textContent = String.fromCharCode(65 + index);
+          verticesGroup.append(circle, label);
+        });
+      }
+
+      function pointFromEvent(event) {
+        const cursor = svg.createSVGPoint();
+        cursor.x = event.clientX;
+        cursor.y = event.clientY;
+        const local = cursor.matrixTransform(svg.getScreenCTM().inverse());
+        const x = Math.round(minCoord + (local.x - minPixel) / spacing);
+        const y = Math.round(maxCoord - (local.y - minPixel) / spacing);
+        return [
+          Math.max(componentArgs.min_coord, Math.min(componentArgs.max_coord, x)),
+          Math.max(componentArgs.min_coord, Math.min(componentArgs.max_coord, y)),
+        ];
+      }
+
+      function sendValue() {
+        window.parent.postMessage(
+          { isStreamlitMessage: true, type: "streamlit:setComponentValue", value: points },
+          "*"
+        );
+      }
+
+      svg.addEventListener("pointerdown", (event) => {
+        const vertex = event.target.closest("[data-index]");
+        if (!vertex) return;
+        activeIndex = Number(vertex.dataset.index);
+        svg.setPointerCapture(event.pointerId);
+        render();
+        event.preventDefault();
+      });
+
+      svg.addEventListener("pointermove", (event) => {
+        if (activeIndex === null) return;
+        points[activeIndex] = pointFromEvent(event);
+        render();
+        event.preventDefault();
+      });
+
+      function finishDrag() {
+        if (activeIndex === null) return;
+        activeIndex = null;
+        render();
+        sendValue();
+      }
+
+      svg.addEventListener("pointerup", finishDrag);
+      svg.addEventListener("pointercancel", finishDrag);
+
+      window.addEventListener("message", (event) => {
+        if (event.data.type !== "streamlit:render") return;
+        componentArgs = event.data.args;
+        points = componentArgs.points.map((point) => [Number(point[0]), Number(point[1])]);
+        title.textContent = `${componentArgs.shape_name} 꼭짓점을 끌어 보세요`;
+        drawGrid();
+        render();
+      });
+
+      window.parent.postMessage(
+        { isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 },
+        "*"
+      );
+      window.parent.postMessage(
+        { isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: 510 },
+        "*"
+      );
+    </script>
+  </body>
+</html>

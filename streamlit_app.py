@@ -1,6 +1,8 @@
 import math
+from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 st.set_page_config(
@@ -13,10 +15,13 @@ GRID_MIN = -6
 GRID_MAX = 6
 SHAPES = {
     "삼각형": [(-3, -2), (2, -2), (0, 3)],
-    "직사각형": [(-3, -2), (2, -2), (2, 2), (-3, 2)],
-    "평행사변형": [(-3, -2), (1, -2), (3, 2), (-1, 2)],
+    "사각형": [(-3, -2), (2, -2), (2, 2), (-3, 2)],
     "사다리꼴": [(-3, -2), (3, -2), (2, 2), (-1, 2)],
 }
+drag_polygon_component = components.declare_component(
+    "drag_polygon",
+    path=str(Path(__file__).parent / "components" / "drag_polygon"),
+)
 
 st.markdown(
     """
@@ -177,6 +182,39 @@ def vertex_editor(prefix, points, count=None):
     return edited
 
 
+def draggable_polygon(shape_name, initial_points):
+    state_key = f"practice_points_{shape_name}"
+    widget_key = f"drag_polygon_{shape_name}"
+    points = st.session_state.get(state_key, initial_points)
+    if st.button("처음 모양으로 되돌리기", key=f"reset_{shape_name}"):
+        points = initial_points
+        st.session_state[state_key] = points
+        st.session_state.pop(widget_key, None)
+    updated_points = drag_polygon_component(
+        points=points,
+        shape_name=shape_name,
+        min_coord=GRID_MIN,
+        max_coord=GRID_MAX,
+        height=500,
+        key=widget_key,
+        default=points,
+    )
+    if updated_points is not None:
+        normalized_points = [
+            (int(point[0]), int(point[1])) for point in updated_points
+        ]
+        if (
+            len(normalized_points) == len(initial_points)
+            and all(
+                GRID_MIN <= x <= GRID_MAX and GRID_MIN <= y <= GRID_MAX
+                for x, y in normalized_points
+            )
+        ):
+            points = normalized_points
+            st.session_state[state_key] = points
+    return points
+
+
 def show_measurements(points):
     if len(set(points)) != len(points):
         st.warning("꼭짓점 위치가 겹쳐 있어요. 서로 다른 격자점을 선택해 주세요.")
@@ -211,17 +249,14 @@ def render_practice():
     )
     left, right = st.columns([1.05, 1])
     with left:
-        shape_name = st.selectbox("어떤 도형을 연습할까요?", list(SHAPES))
-        points = vertex_editor(f"practice_{shape_name}", SHAPES[shape_name])
-        connect = st.toggle("점선을 따라 꼭짓점을 연결해 도형 완성하기", value=True)
+        shape_name = st.selectbox("연습할 도형을 골라요", list(SHAPES))
         st.markdown(
-            '<div class="hint">💡 꼭짓점 좌표를 바꿔 도형을 변형해 보세요. '
-            '점선 상태에서 꼭짓점 순서대로 연결해도 좋아요.</div>',
+            '<div class="hint">💡 모눈종이의 동그란 꼭짓점을 잡고 원하는 칸으로 '
+            '끌어 보세요. 마우스와 터치 모두 사용할 수 있어요.</div>',
             unsafe_allow_html=True,
         )
     with right:
-        st.markdown("#### 모눈종이")
-        st.markdown(draw_grid(points, dashed=not connect), unsafe_allow_html=True)
+        points = draggable_polygon(shape_name, SHAPES[shape_name])
     st.divider()
     show_measurements(points)
 
