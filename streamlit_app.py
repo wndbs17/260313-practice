@@ -16,7 +16,7 @@ GRID_MAX = 6
 SHAPES = {
     "삼각형": [(-3, -2), (2, -2), (0, 3)],
     "사각형": [(-3, -2), (2, -2), (2, 2), (-3, 2)],
-    "사다리꼴": [(-3, -2), (3, -2), (2, 2), (-1, 2)],
+    "원": [(0, 0), (3, 0)],
 }
 drag_polygon_component = components.declare_component(
     "drag_polygon",
@@ -162,31 +162,31 @@ def draw_grid(points=None, *, dashed=False, axis=None, label=None, height=440):
     """
 
 
-def vertex_editor(prefix, points, count=None):
-    count = count or len(points)
-    edited = []
-    columns = st.columns(min(count, 4))
-    for index in range(count):
-        default = points[index] if index < len(points) else (0, 0)
-        with columns[index % len(columns)]:
-            st.markdown(f"**꼭짓점 {chr(65 + index)}**")
-            x = st.number_input(
-                "가로 x", GRID_MIN, GRID_MAX, int(default[0]),
-                key=f"{prefix}_{index}_x",
-            )
-            y = st.number_input(
-                "세로 y", GRID_MIN, GRID_MAX, int(default[1]),
-                key=f"{prefix}_{index}_y",
-            )
-        edited.append((x, y))
-    return edited
-
-
-def draggable_polygon(shape_name, initial_points):
-    state_key = f"practice_points_{shape_name}"
-    widget_key = f"drag_polygon_{shape_name}"
+def draggable_polygon(
+    shape_name,
+    initial_points,
+    *,
+    key_prefix=None,
+    axis=None,
+    reset_label="처음 모양으로 되돌리기",
+):
+    state_key = (
+        f"{key_prefix}_points_{shape_name}"
+        if key_prefix
+        else f"practice_points_{shape_name}"
+    )
+    widget_key = (
+        f"{key_prefix}_drag_polygon_{shape_name}"
+        if key_prefix
+        else f"drag_polygon_{shape_name}"
+    )
+    reset_key = (
+        f"reset_{key_prefix}_{shape_name}"
+        if key_prefix
+        else f"reset_{shape_name}"
+    )
     points = st.session_state.get(state_key, initial_points)
-    if st.button("처음 모양으로 되돌리기", key=f"reset_{shape_name}"):
+    if st.button(reset_label, key=reset_key):
         points = initial_points
         st.session_state[state_key] = points
         st.session_state.pop(widget_key, None)
@@ -196,6 +196,7 @@ def draggable_polygon(shape_name, initial_points):
         min_coord=GRID_MIN,
         max_coord=GRID_MAX,
         height=500,
+        axis=axis,
         key=widget_key,
         default=points,
     )
@@ -215,7 +216,23 @@ def draggable_polygon(shape_name, initial_points):
     return points
 
 
-def show_measurements(points):
+def show_measurements(points, shape_name):
+    if shape_name == "원":
+        center, edge = points
+        radius = math.hypot(edge[0] - center[0], edge[1] - center[1])
+        if radius == 0:
+            st.warning("원의 중심과 둘레 위의 점은 서로 다른 위치에 놓아 주세요.")
+            return
+        st.markdown("#### 📏 도형 측정 도구")
+        metric_columns = st.columns(3)
+        metric_columns[0].metric("반지름", f"{radius:.1f} cm")
+        metric_columns[1].metric("넓이", f"{math.pi * radius ** 2:.1f} ㎠")
+        metric_columns[2].metric("둘레", f"{2 * math.pi * radius:.1f} cm")
+        st.caption(
+            "반지름은 중심과 둘레 위 점을 잇는 선의 길이예요. "
+            "넓이는 πr², 둘레는 2πr로 계산해요."
+        )
+        return
     if len(set(points)) != len(points):
         st.warning("꼭짓점 위치가 겹쳐 있어요. 서로 다른 격자점을 선택해 주세요.")
         return
@@ -250,15 +267,21 @@ def render_practice():
     left, right = st.columns([1.05, 1])
     with left:
         shape_name = st.selectbox("연습할 도형을 골라요", list(SHAPES))
+        if shape_name == "원":
+            hint = (
+                "💡 원둘레 위의 점을 움직이면 중심과 점 사이 선의 길이가 "
+                "반지름이 되어 원의 크기가 바뀌어요. 중심점을 움직여 원을 옮길 수도 있어요."
+            )
+        else:
+            hint = "💡 모눈종이의 꼭짓점을 잡고 원하는 칸으로 끌어 보세요."
         st.markdown(
-            '<div class="hint">💡 모눈종이의 동그란 꼭짓점을 잡고 원하는 칸으로 '
-            '끌어 보세요. 마우스와 터치 모두 사용할 수 있어요.</div>',
+            f'<div class="hint">{hint} 마우스와 터치 모두 사용할 수 있어요.</div>',
             unsafe_allow_html=True,
         )
     with right:
         points = draggable_polygon(shape_name, SHAPES[shape_name])
     st.divider()
-    show_measurements(points)
+    show_measurements(points, shape_name)
 
 
 def render_symmetry_quiz():
@@ -271,10 +294,14 @@ def render_symmetry_quiz():
         st.markdown(draw_grid(original, axis="vertical", label="주어진 도형"), unsafe_allow_html=True)
         st.caption("왼쪽 도형의 각 꼭짓점과 대칭축까지의 거리를 살펴보세요.")
     with right:
-        st.markdown("**대칭축 오른쪽에 꼭짓점 4개를 찍어 보세요.**")
-        answer = vertex_editor("symmetry_answer", [(1, -2), (4, -2), (4, 2), (2, 2)])
-        st.markdown(draw_grid(answer, axis="vertical", dashed=True, label="내가 그린 도형"),
-                    unsafe_allow_html=True)
+        st.markdown("**오른쪽 격자에서 꼭짓점을 움직여 대칭 도형을 완성해 보세요.**")
+        answer = draggable_polygon(
+            "내 답안",
+            [(1, -2), (4, -2), (4, 2), (2, 2)],
+            key_prefix="quiz_symmetry",
+            axis="vertical",
+            reset_label="답안 초기화",
+        )
     if st.button("대칭 확인하기", type="primary", key="check_symmetry"):
         if sorted(answer) == sorted(reflected):
             st.success("정답이에요! 대칭축에서 같은 거리만큼 떨어져 있어요. 🎉")
@@ -291,14 +318,19 @@ def render_copy_quiz():
     with left:
         st.markdown(draw_grid(target, label="따라 그릴 도형"), unsafe_allow_html=True)
     with right:
-        answer = vertex_editor("copy_answer", [(-4, -2), (1, -2), (3, 1), (-2, 3)])
-        st.markdown(draw_grid(answer, dashed=True, label="내가 그린 도형"), unsafe_allow_html=True)
+        st.markdown("**격자 위 꼭짓점을 움직여 똑같이 그려 보세요.**")
+        answer = draggable_polygon(
+            "내 답안",
+            [(-3, -2), (2, -2), (2, 2), (-3, 2)],
+            key_prefix="quiz_copy",
+            reset_label="답안 초기화",
+        )
     if st.button("그림 확인하기", type="primary", key="check_copy"):
         if answer == target:
             st.success("정확하게 그렸어요! 꼭짓점의 순서와 위치가 모두 같아요. 🌟")
             st.balloons()
         else:
-            st.info("아직 달라요. 각 꼭짓점의 좌표를 비교해 보세요. 순서도 중요해요!")
+            st.info("아직 달라요. 각 꼭짓점의 위치와 순서를 다시 비교해 보세요.")
 
 
 def render_area_quiz():
