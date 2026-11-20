@@ -152,7 +152,7 @@ def draw_grid(points=None, *, dashed=False, axis=None, label=None, height=440):
     <svg viewBox="0 0 {width} {width}" role="img" aria-label="격자 위 도형"
       style="width:100%;height:auto;max-height:{height}px;background:#fff;border-radius:16px">
       <style>
-        .grid {{ stroke:#e7edf3;stroke-width:1 }}
+        .grid {{ stroke:#dbe5ed;stroke-width:1.2 }}
         .point-label {{ font:700 13px sans-serif;fill:#087f8c }}
         .axis-label {{ font:700 13px sans-serif;fill:#e66c52 }}
         .caption {{ font:12px sans-serif;fill:#718096 }}
@@ -291,7 +291,11 @@ def render_symmetry_quiz():
     reflected = [(-x, y) for x, y in original]
     left, right = st.columns([1, 1.1])
     with left:
-        st.markdown(draw_grid(original, axis="vertical", label="주어진 도형"), unsafe_allow_html=True)
+        components.html(
+            draw_grid(original, axis="vertical", label="주어진 도형"),
+            height=480,
+            scrolling=False,
+        )
         st.caption("왼쪽 도형의 각 꼭짓점과 대칭축까지의 거리를 살펴보세요.")
     with right:
         st.markdown("**오른쪽 격자에서 꼭짓점을 움직여 대칭 도형을 완성해 보세요.**")
@@ -316,7 +320,11 @@ def render_copy_quiz():
     target = [(-4, -2), (1, -2), (3, 1), (-2, 3)]
     left, right = st.columns(2)
     with left:
-        st.markdown(draw_grid(target, label="따라 그릴 도형"), unsafe_allow_html=True)
+        components.html(
+            draw_grid(target, label="따라 그릴 도형"),
+            height=480,
+            scrolling=False,
+        )
     with right:
         st.markdown("**격자 위 꼭짓점을 움직여 똑같이 그려 보세요.**")
         answer = draggable_polygon(
@@ -339,7 +347,11 @@ def render_area_quiz():
     target = [(-4, -2), (2, -2), (2, 2), (-1, 2)]
     left, right = st.columns([1, 1])
     with left:
-        st.markdown(draw_grid(target, label="넓이를 구해 보세요"), unsafe_allow_html=True)
+        components.html(
+            draw_grid(target, label="넓이를 구해 보세요"),
+            height=480,
+            scrolling=False,
+        )
     with right:
         st.markdown(
             '<div class="card"><h3>넓이는 몇 ㎠일까요?</h3>'
