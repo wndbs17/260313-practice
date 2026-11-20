@@ -195,7 +195,7 @@ def draggable_polygon(
         shape_name=shape_name,
         min_coord=GRID_MIN,
         max_coord=GRID_MAX,
-        height=500,
+        height=540,
         axis=axis,
         key=widget_key,
         default=points,

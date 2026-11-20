@@ -28,6 +28,7 @@
         display: block;
         width: 100%;
         height: auto;
+        max-height: 440px;
         touch-action: none;
         user-select: none;
       }
@@ -275,7 +276,7 @@
         "*"
       );
       window.parent.postMessage(
-        { isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: 510 },
+        { isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: 540 },
         "*"
       );
     </script>
